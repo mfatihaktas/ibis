@@ -614,7 +614,7 @@ def test_timestamp_truncate(backend, alltypes, df, unit):
         param(
             "Y",
             marks=[
-                pytest.mark.never(
+                pytest.mark.notimpl(
                     ["flink"],
                     raises=Py4JJavaError,
                     reason=(
@@ -627,7 +627,7 @@ def test_timestamp_truncate(backend, alltypes, df, unit):
         param(
             "M",
             marks=[
-                pytest.mark.never(
+                pytest.mark.notimpl(
                     ["flink"],
                     raises=Py4JJavaError,
                     reason=(
@@ -640,7 +640,7 @@ def test_timestamp_truncate(backend, alltypes, df, unit):
         param(
             "D",
             marks=[
-                pytest.mark.never(
+                pytest.mark.notimpl(
                     ["flink"],
                     raises=Py4JJavaError,
                     reason=(
@@ -659,7 +659,7 @@ def test_timestamp_truncate(backend, alltypes, df, unit):
                     reason="Unsupported truncate unit W",
                 ),
                 pytest.mark.broken(["impala"], raises=AssertionError),
-                pytest.mark.never(
+                pytest.mark.notimpl(
                     ["flink"],
                     raises=Py4JJavaError,
                     reason=(
@@ -792,7 +792,7 @@ def test_date_truncate(backend, alltypes, df, unit):
                     raises=com.UnsupportedOperationError,
                     reason="week not implemented",
                 ),
-                pytest.mark.broken(
+                pytest.mark.notimpl(
                     ["flink"],
                     raises=Py4JJavaError,
                     reason="ParseException: Encountered 'WEEK'. Was expecting one of: DAY, DAYS, HOUR",
@@ -855,7 +855,7 @@ def test_date_truncate(backend, alltypes, df, unit):
                     raises=com.UnsupportedArgumentError,
                     reason="Interval unit \"ms\" is not allowed. Allowed units are: ['Y', 'W', 'M', 'D', 'h', 'm', 's']",
                 ),
-                pytest.mark.broken(
+                pytest.mark.notimpl(
                     ["flink"],
                     raises=Py4JJavaError,
                     reason="ParseException: Encountered 'MILLISECOND'. Was expecting one of: DAY, DAYS, HOUR, ...",
@@ -879,7 +879,7 @@ def test_date_truncate(backend, alltypes, df, unit):
                     raises=AssertionError,
                     reason="we're dropping microseconds to ensure results consistent with pandas",
                 ),
-                pytest.mark.broken(
+                pytest.mark.notimpl(
                     ["flink"],
                     raises=Py4JJavaError,
                     reason="ParseException: Encountered 'MICROSECOND'. Was expecting one of: DAY, DAYS, HOUR, ...",
@@ -972,9 +972,11 @@ def test_integer_to_interval_timestamp(
     [
         "flink",
     ],
-    raises=com.OperationNotDefinedError,
+    raises=Py4JJavaError,
     reason=(
-        "No translation rule for <class 'ibis.expr.operations.strings.StringSplit'>"
+        "java.time.DateTimeException: For input string: '2006-15-09'"
+        "TODO (mehmet): I guess this exception is caused by the undefined month `15`."
+        "This can potentially be an error introducer by the Flink operators."
     ),
 )
 def test_integer_to_interval_date(backend, con, alltypes, df, unit):
@@ -1667,8 +1669,8 @@ def test_interval_add_cast_column(backend, alltypes, df):
                 ),
                 pytest.mark.notimpl(
                     ["flink"],
-                    raises=AttributeError,
-                    reason="'StringConcat' object has no attribute 'value'",
+                    raises=AssertionError,
+                    reason="Series values are different (100.0 %)",
                 ),
             ],
             id="column_format_str",
@@ -1702,16 +1704,7 @@ unit_factors = {"s": 10**9, "ms": 10**6, "us": 10**3, "ns": 1}
 @pytest.mark.parametrize(
     "unit",
     [
-        param(
-            "s",
-            marks=[
-                pytest.mark.broken(
-                    ["flink"],
-                    raises=Py4JJavaError,
-                    reason="CalciteContextException: Column '1523613251' not found in any table",
-                ),
-            ],
-        ),
+        "s",
         param(
             "ms",
             marks=[
@@ -1724,11 +1717,6 @@ unit_factors = {"s": 10**9, "ms": 10**6, "us": 10**3, "ns": 1}
                     ["clickhouse"],
                     raises=com.UnsupportedOperationError,
                     reason="`ms` unit is not supported!",
-                ),
-                pytest.mark.broken(
-                    ["flink"],
-                    raises=Py4JJavaError,
-                    reason="CalciteContextException: Column '1523613251872' not found in any table",
                 ),
             ],
         ),
@@ -1768,7 +1756,7 @@ unit_factors = {"s": 10**9, "ms": 10**6, "us": 10**3, "ns": 1}
                 pytest.mark.notimpl(
                     ["flink"],
                     raises=ValueError,
-                    reason="<TimestampUnit.MICROSECOND: 'us'> unit is not supported!",
+                    reason="<TimestampUnit.NANOSECOND: 'us'> unit is not supported!",
                 ),
             ],
         ),
@@ -1822,7 +1810,7 @@ def test_integer_to_timestamp(backend, con, unit):
                     raises=ValueError,
                     reason=(
                         "datetime formatting style not supported"
-                        "Test failed with; ValueError: NaTType does not support strftime"
+                        "Test failed with 'ValueError: NaTType does not support strftime'"
                     ),
                 ),
             ],
@@ -1899,11 +1887,6 @@ def test_string_to_timestamp(alltypes, fmt):
 )
 @pytest.mark.notimpl(["mssql", "druid", "oracle"], raises=com.OperationNotDefinedError)
 @pytest.mark.notimpl(["impala"], raises=com.UnsupportedBackendType)
-@pytest.mark.notimpl(
-    ["flink"],
-    raises=Py4JJavaError,
-    reason="DayOfWeekName is not supported in Flink",
-)
 def test_day_of_week_scalar(con, date, expected_index, expected_day):
     expr = ibis.literal(date).cast(dt.date)
     result_index = con.execute(expr.day_of_week.index().name("tmp"))
@@ -1918,15 +1901,6 @@ def test_day_of_week_scalar(con, date, expected_index, expected_day):
     ["druid"],
     raises=AttributeError,
     reason="StringColumn' object has no attribute 'day_of_week'",
-)
-@pytest.mark.never(
-    ["flink"],
-    raises=Py4JJavaError,
-    reason=(
-        "SqlValidatorException: No match found for function signature dayname(<TIMESTAMP>)"
-        "`day_of_week_name` is not supported in Flink"
-        "Ref: https://nightlies.apache.org/flink/flink-docs-release-1.13/docs/dev/table/functions/systemfunctions/#temporal-functions"
-    ),
 )
 def test_day_of_week_column(backend, alltypes, df):
     expr = alltypes.timestamp_col.day_of_week
@@ -1958,15 +1932,6 @@ def test_day_of_week_column(backend, alltypes, df):
                 pytest.mark.notimpl(
                     ["mssql"],
                     raises=com.OperationNotDefinedError,
-                ),
-                pytest.mark.never(
-                    ["flink"],
-                    raises=Py4JJavaError,
-                    reason=(
-                        "SqlValidatorException: No match found for function signature dayname(<TIMESTAMP>)"
-                        "`day_of_week_name` is not supported in Flink"
-                        "Ref: https://nightlies.apache.org/flink/flink-docs-release-1.13/docs/dev/table/functions/systemfunctions/#temporal-functions"
-                    ),
                 ),
             ],
         ),
@@ -2163,11 +2128,6 @@ def test_timestamp_literal(con, backend):
         "No match found for function signature make_timestamp(<NUMERIC>, <NUMERIC>, "
         "<NUMERIC>, <NUMERIC>, <NUMERIC>, <NUMERIC>)"
     ),
-)
-@pytest.mark.notimpl(
-    ["flink"],
-    "https://github.com/ibis-project/ibis/pull/6920/files#r1372453059",
-    raises=AssertionError,
 )
 def test_timestamp_with_timezone_literal(request, con, backend, timezone, expected):
     expr = ibis.timestamp(2022, 2, 4, 16, 20, 0).cast(dt.Timestamp(timezone=timezone))
@@ -2761,7 +2721,6 @@ def test_timestamp_precision_output(con, ts, scale, unit):
         "dask",
         "datafusion",
         "druid",
-        "flink",
         "impala",
         "oracle",
         "pandas",
@@ -2805,6 +2764,15 @@ def test_timestamp_precision_output(con, ts, scale, unit):
                     ["mysql"],
                     raises=com.OperationNotDefinedError,
                     reason="timestampdiff rounds after subtraction and mysql doesn't have a date_trunc function",
+                ),
+                pytest.mark.broken(
+                    ["flink"],
+                    raises=AssertionError,
+                    reason=(
+                        "assert 1 == 2"
+                        "Note (mehmet): Flink rounds the time difference down not up."
+                        "Hence computes 1 hour difference between 23:59:59 and 01:58:00."
+                    ),
                 )
             ],
         ),
@@ -2819,7 +2787,6 @@ def test_delta(con, start, end, unit, expected):
     [
         "bigquery",
         "dask",
-        "flink",
         "impala",
         "mysql",
         "oracle",
@@ -2855,6 +2822,11 @@ def test_delta(con, start, end, unit, expected):
                 pytest.mark.notimpl(
                     ["datafusion"],
                     raises=com.UnsupportedOperationError,
+                    reason="backend doesn't support sub-second interval precision",
+                ),
+                pytest.mark.notimpl(
+                    ["flink"],
+                    raises=KeyError,
                     reason="backend doesn't support sub-second interval precision",
                 ),
             ],
@@ -2901,6 +2873,11 @@ def test_delta(con, start, end, unit, expected):
                     ["datafusion"],
                     raises=com.OperationNotDefinedError,
                 ),
+                pytest.mark.broken(
+                    ["flink"],
+                    raises=AssertionError,
+                    reason="numpy array values are different (50.0 %)",
+                ),
             ],
             id="days",
         ),
@@ -2918,7 +2895,6 @@ def test_timestamp_bucket(backend, kws, pd_freq):
         "bigquery",
         "dask",
         "datafusion",
-        "flink",
         "impala",
         "mysql",
         "oracle",

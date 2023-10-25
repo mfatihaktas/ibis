@@ -23,6 +23,9 @@ class TestConf(BackendTest, RoundAwayFromZero):
 
         env_settings = EnvironmentSettings.in_batch_mode()
         table_env = TableEnvironment.create(env_settings)
+        table_config = table_env.get_config()
+        table_config.set("table.local-time-zone", "UTC")
+
         return ibis.flink.connect(table_env, **kw)
 
     def _load_data(self, **_: Any) -> None:

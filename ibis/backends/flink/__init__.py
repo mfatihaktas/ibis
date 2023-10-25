@@ -444,7 +444,6 @@ class Backend(BaseBackend, CanCreateDatabase):
     def create_view(
         self,
         name: str,
-        obj: ir.Table | None = None,
         table: ir.Table | None = None,
         query_expression: str | None = None,
         database: str | None = None,
@@ -488,7 +487,7 @@ class Backend(BaseBackend, CanCreateDatabase):
                     "`table` should be given if no `query_expression` is given."
                 )
 
-            query_expression = self.compile(obj)
+            query_expression = self.compile(table)
 
         statement = CreateView(
             name=name,

@@ -225,9 +225,19 @@ backend_type_mapping = {
 }
 
 
-@mark.notimpl(["datafusion", "druid", "flink"])
+@mark.notimpl(["datafusion", "druid"])
 def test_create_table_from_schema(con, new_schema, temp_table):
-    new_table = con.create_table(temp_table, schema=new_schema)
+    if con.name == "flink":
+        new_table = con.create_table(
+            temp_table,
+            schema=new_schema,
+            tbl_properties={
+                "connector": None,
+            },
+        )
+    else:
+        new_table = con.create_table(temp_table, schema=new_schema)
+
     backend_mapping = backend_type_mapping.get(con.name, {})
 
     result = ibis.schema(

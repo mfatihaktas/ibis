@@ -18,6 +18,7 @@ from ibis.backends.flink.ddl import (
     DropDatabase,
     DropTable,
     InsertSelect,
+    RenameTable,
 )
 
 if TYPE_CHECKING:
@@ -383,6 +384,29 @@ class Backend(BaseBackend, CanCreateDatabase):
             temp=temp,
         )
         self._exec_sql(statement.compile())
+
+    def rename_table(
+        self,
+        old_name: str,
+        new_name: str,
+        must_exist: bool = True,
+    ) -> None:
+        """Rename an existing table.
+
+        Parameters
+        ----------
+        old_name
+            The old name of the table.
+        new_name
+            The new name of the table.
+        """
+        statement = RenameTable(
+            old_name=old_name,
+            new_name=new_name,
+            must_exist=must_exist,
+        )
+        sql = statement.compile()
+        self._exec_sql(sql)
 
     def create_view(
         self,

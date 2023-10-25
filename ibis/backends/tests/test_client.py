@@ -296,7 +296,6 @@ def test_create_temporary_table_from_schema(tmpcon, new_schema):
         "datafusion",
         "druid",
         "duckdb",
-        "flink",
         "mssql",
         "mysql",
         "oracle",
@@ -310,7 +309,18 @@ def test_create_temporary_table_from_schema(tmpcon, new_schema):
 )
 def test_rename_table(con, temp_table, temp_table_orig):
     schema = ibis.schema({"a": "string", "b": "bool", "c": "int32"})
-    con.create_table(temp_table_orig, schema=schema)
+
+    if con.name == "flink":
+        con.create_table(
+            temp_table_orig,
+            schema=schema,
+            tbl_properties={
+                "connector": None,
+            },
+        )
+    else:
+        con.create_table(temp_table_orig, schema=schema)
+
     con.rename_table(temp_table_orig, temp_table)
     new = con.table(temp_table)
     assert new.schema().equals(schema)

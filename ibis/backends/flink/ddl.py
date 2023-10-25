@@ -9,6 +9,7 @@ from ibis.backends.base.sql.ddl import (
     CreateTableWithSchema,
     DropObject,
     InsertSelect,
+    RenameTable,
     _CreateDDL,
     _format_properties,
     _is_quoted,
@@ -169,6 +170,28 @@ class DropTable(_CatalogAwareBaseQualifiedSQLStatement, DropObject):
         if_exists = "" if self.must_exist else "IF EXISTS "
         object_name = self._object_name()
         return f"DROP {temp}{self._object_type} {if_exists}{object_name}"
+
+
+class RenameTable(RenameTable):
+    def __init__(
+        self,
+        old_name: str,
+        new_name: str,
+        old_database: str | None = None,
+        new_database: str | None = None,
+        must_exist: bool = True,
+    ):
+        super().__init__(
+            old_name=old_name,
+            new_name=new_name,
+            old_database=old_database,
+            new_database=new_database,
+        )
+        self.must_exist = must_exist
+
+    def compile(self):
+        if_exists = "" if self.must_exist else "IF EXISTS"
+        return f"ALTER TABLE {if_exists} {self._old} RENAME TO {self._new}"
 
 
 class _DatabaseObject:

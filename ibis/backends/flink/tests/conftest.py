@@ -27,7 +27,6 @@ class TestConf(BackendTest, RoundAwayFromZero):
 
     def _load_data(self, **_: Any) -> None:
         import pandas as pd
-
         from ibis.backends.tests.data import json_types
 
         for table_name in TEST_TABLES:

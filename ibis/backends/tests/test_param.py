@@ -91,7 +91,6 @@ def test_scalar_param_array(con):
     ["mysql", "sqlite", "mssql"],
     reason="mysql and sqlite will never implement struct types",
 )
-@pytest.mark.notimpl(["flink"], "WIP")
 def test_scalar_param_struct(con):
     value = dict(a=1, b="abc", c=3.0)
     param = ibis.param("struct<a: int64, b: string, c: float64>")
@@ -110,7 +109,7 @@ def test_scalar_param_struct(con):
     "WIP",
     raises=Py4JJavaError,
     reason=(
-        "SqlParseException: Expecting alias, found character literal"
+        "SqlParseException: No match found for function signature MAP_FROM_ARRAYS(<CHAR(1) ARRAY>, <CHAR(3) ARRAY>)"
         "sql= SELECT MAP_FROM_ARRAYS(ARRAY['a', 'b', 'c'], ARRAY['ghi', 'def', 'abc']) '[' 'b' ']' AS `MapGet(param_0, 'b', None)`"
     ),
 )
@@ -242,7 +241,6 @@ def test_scalar_param_date(backend, alltypes, value):
         "druid",
     ]
 )
-@pytest.mark.notimpl(["flink"], "WIP")
 def test_scalar_param_nested(con):
     param = ibis.param("struct<x: array<struct<y: array<double>>>>")
     value = OrderedDict([("x", [OrderedDict([("y", [1.0, 2.0, 3.0])])])])

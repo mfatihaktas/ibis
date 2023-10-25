@@ -38,7 +38,11 @@ pytestmark = [
 )
 @pytest.mark.broken(
     ["flink"],
-    reason="https://github.com/ibis-project/ibis/pull/6920#discussion_r1373212503",
+    raises=AssertionError,
+    reason=(
+        "Series values are different (16.66667 %)"
+        "https://github.com/ibis-project/ibis/pull/6920#discussion_r1373212503"
+    ),
 )
 def test_json_getitem(json_t, expr_fn, expected):
     expr = expr_fn(json_t)

@@ -220,7 +220,6 @@ backend_type_mapping = {
 def test_create_table_from_schema(con, new_schema, temp_table):
     new_table = con.create_table(temp_table, schema=new_schema)
     backend_mapping = backend_type_mapping.get(con.name, {})
-
     result = ibis.schema(
         {
             column_name: backend_mapping.get(
@@ -290,7 +289,18 @@ def test_create_temporary_table_from_schema(tmpcon, new_schema):
 )
 def test_rename_table(con, temp_table, temp_table_orig):
     schema = ibis.schema({"a": "string", "b": "bool", "c": "int32"})
-    con.create_table(temp_table_orig, schema=schema)
+
+    if con.name == "flink":
+        con.create_table(
+            temp_table_orig,
+            schema=schema,
+            tbl_properties={
+                "connector": None,
+            },
+        )
+    else:
+        con.create_table(temp_table_orig, schema=schema)
+
     con.rename_table(temp_table_orig, temp_table)
     new = con.table(temp_table)
     assert new.schema().equals(schema)

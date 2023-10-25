@@ -23,6 +23,8 @@ from ibis.backends.flink.ddl import (
     InsertSelect,
     RenameTable,
 )
+from ibis.util import gen_name, normalize_filename
+from pathlib import Path
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -155,7 +157,7 @@ class Backend(BaseBackend, CanCreateDatabase):
         database: str | None,
         catalog: str | None,
     ) -> str:
-        if is_fully_qualified(name):
+        if name and is_fully_qualified(name):
             return name
 
         return sg.table(
@@ -323,17 +325,29 @@ class Backend(BaseBackend, CanCreateDatabase):
             raise exc.IbisError("The schema or obj parameter is required")
 
         if overwrite:
-            self.drop_table(name=name, catalog=catalog, database=database, force=True)
+            if isinstance(obj, pd.DataFrame):
+                qualified_name = self._fully_qualified_name(name, database, catalog)
+                self._table_env.drop_temporary_view(qualified_name)
+            else:
+                # Note (mehmet): The table might refer to a physical table or a virtual table (view).
+                self.drop_table(name=name, database=database, catalog=catalog, temp=temp, force=True)
+                self.drop_view(name=name, database=database, catalog=catalog, temp=temp, force=True)
 
         if isinstance(obj, pa.Table):
             obj = obj.to_pandas()
+
         if isinstance(obj, pd.DataFrame):
             qualified_name = self._fully_qualified_name(name, database, catalog)
+
+            if overwrite:
+                self._table_env.drop_temporary_view(qualified_name)
+
             table = self._table_env.from_pandas(obj)
             # in-memory data is created as views in `pyflink`
             # TODO(chloeh13q): alternatively, we can do CREATE TABLE and then INSERT
             # INTO ... VALUES to keep things consistent
             self._table_env.create_temporary_view(qualified_name, table)
+
         if isinstance(obj, ir.Table):
             if schema is not None and not schema.equals(obj.schema()):
                 raise exc.IbisTypeError(
@@ -369,7 +383,7 @@ class Backend(BaseBackend, CanCreateDatabase):
             sql = statement.compile()
             self._exec_sql(sql)
 
-        return self.table(name, database=database)
+        return self.table(name, database=database, catalog=catalog)
 
     def drop_table(
         self,
@@ -431,6 +445,7 @@ class Backend(BaseBackend, CanCreateDatabase):
         self,
         name: str,
         obj: ir.Table | None = None,
+        table: ir.Table | None = None,
         query_expression: str | None = None,
         database: str | None = None,
         catalog: str | None = None,
@@ -444,7 +459,7 @@ class Backend(BaseBackend, CanCreateDatabase):
         ----------
         name
             Name of the new view.
-        obj
+        table
             An Ibis table expression that will be used to create the view.
         database
             Name of the database where the view will be created, if not
@@ -468,9 +483,9 @@ class Backend(BaseBackend, CanCreateDatabase):
             self.drop_view(name=name, database=database, catalog=catalog, force=True)
 
         if query_expression is None:
-            if obj is None:
+            if table is None:
                 raise exc.IbisError(
-                    "`obj` should be given if no `query_expression` is given."
+                    "`table` should be given if no `query_expression` is given."
                 )
 
             query_expression = self.compile(obj)
@@ -492,6 +507,7 @@ class Backend(BaseBackend, CanCreateDatabase):
         *,
         database: str | None = None,
         catalog: str | None = None,
+        temp: bool = False,
         force: bool = False,
     ) -> None:
         """Drop a view.
@@ -504,6 +520,8 @@ class Backend(BaseBackend, CanCreateDatabase):
             Name of the database where the view exists, if not the default.
         catalog
             Name of the catalog where the view exists, if not the default.
+        temp
+            Whether a table is temporary or not.
         force
             If `False`, an exception is raised if the view does not exist.
         """
@@ -515,9 +533,223 @@ class Backend(BaseBackend, CanCreateDatabase):
             database=database,
             catalog=catalog,
             must_exist=(not force),
+            temp=temp,
         )
         sql = statement.compile()
         self._exec_sql(sql)
+
+    def register(
+        self,
+        source: str | Path | pa.Table | pd.DataFrame,  # TODO (mehmet): pa.RecordBatch | pa.Dataset
+        table_name: str | None = None,
+        **kwargs: Any,
+    ) -> ir.Table:
+        """Register a data set with `table_name` located at `source`.
+
+        Parameters
+        ----------
+        source
+            The data source(s). May be a path to a file or directory of
+            parquet/csv files, a pandas dataframe, or a pyarrow table.
+        table_name
+            The name of the table
+        kwargs
+            Datafusion-specific keyword arguments
+
+        Examples
+        --------
+        Register a csv:
+
+        >>> import ibis
+        >>> conn = ibis.datafusion.connect(config)
+        >>> conn.register("path/to/data.csv", "my_table")
+        >>> conn.table("my_table")
+
+        Register a PyArrow table:
+
+        >>> import pyarrow as pa
+        >>> tab = pa.table({"x": [1, 2, 3]})
+        >>> conn.register(tab, "my_table")
+        >>> conn.table("my_table")
+
+        Register a PyArrow dataset:
+
+        >>> import pyarrow.dataset as ds
+        >>> dataset = ds.dataset("path/to/table")
+        >>> conn.register(dataset, "my_table")
+        >>> conn.table("my_table")
+        """
+        import pandas as pd
+        import pyarrow as pa
+
+        if isinstance(source, (str, Path)):
+            obj = self._get_dataframe_from_path(path=source)
+
+        elif (
+            isinstance(source, list)
+            and all(isinstance(s, (str, Path)) for s in source)
+        ):
+            obj = pd.concat(
+                [
+                    self._get_dataframe_from_path(path) for path in source
+                ],
+                ignore_index=True,
+                sort=False,
+            )
+
+        elif isinstance(source, (pa.Table, pd.DataFrame)):
+            obj = source
+
+        else:
+            raise ValueError(
+                f"Unsupported source type: {type(source)}"
+            )
+
+        # TODO (mehmet): Added the following block to make the following tests pass
+        # - test_register_csv()
+        # - test_register_iterator_parquet()
+        # Implicit setting of `table_name` (when it is None) looks strange to me.
+        if table_name is None:
+            source_list = source
+            if not isinstance(source, list):
+                source_list = [source]
+
+            for source in source_list:
+                if not isinstance(source, (str, Path)):
+                    continue
+
+                source = str(source)
+                if (
+                    source.startswith(("parquet://", "parq://"))
+                    or source.endswith(("parq", "parquet"))
+                ):
+                    table_name = table_name or gen_name("read_parquet")
+                elif (
+                    source.startswith(("csv://"))
+                    or source.endswith("csv")
+                    or source.endswith("csv.gz")
+                ):
+                    table_name = table_name or gen_name("read_csv")
+                elif source.endswith("json"):
+                    table_name = table_name or gen_name("read_json")
+
+        table_name = table_name or gen_name("default")
+        return self.create_table(table_name, obj, overwrite=True)
+
+    def _get_dataframe_from_path(self, path: str | Path) -> pd.DataFrame:
+        import glob
+        import pandas as pd
+
+        dataframe_list = []
+        path_str = str(path)
+        path_normalized = normalize_filename(path)
+        for file_path in glob.glob(path_normalized):
+            if (
+                path_str.startswith(("parquet://", "parq://"))
+                or path_str.endswith(("parq", "parquet"))
+            ):
+                dataframe = pd.read_parquet(file_path)
+            elif (
+                path_str.startswith(("csv://"))
+                or path_str.endswith("csv")
+                or path_str.endswith("csv.gz")
+            ):
+                dataframe = pd.read_csv(file_path)
+            elif path_str.endswith("json"):
+                dataframe = pd.read_json(file_path, lines=True)
+            else:
+                raise ValueError(
+                    f"Unsupported file_path: {file_path}"
+                )
+
+            dataframe_list.append(dataframe)
+
+        return pd.concat(dataframe_list, ignore_index=True, sort=False)
+
+    def read_file(
+        self, file_type: str, path: str | Path, table_name: str | None = None, **kwargs: Any
+    ) -> ir.Table:
+        """Register a file as a table in the current database.
+
+        Parameters
+        ----------
+        file_type
+            File type, e.g., parquet, csv, json.
+        path
+            The data source.
+        table_name
+            An optional name to use for the created table. This defaults to
+            a sequentially generated name.
+
+        Returns
+        -------
+        ir.Table
+            The just-registered table
+        """
+        path_normalized = normalize_filename(path)
+        obj = self._get_dataframe_from_path(path)
+        table_name = table_name or gen_name(f"read_{file_type}")
+        return self.create_table(table_name, obj, overwrite=True)
+
+    def read_parquet(
+        self, path: str | Path, table_name: str | None = None, **kwargs: Any
+    ) -> ir.Table:
+        """Register a parquet file as a table in the current database.
+
+        Parameters
+        ----------
+        path
+            The data source.
+        table_name
+            An optional name to use for the created table. This defaults to
+            a sequentially generated name.
+
+        Returns
+        -------
+        ir.Table
+            The just-registered table
+        """
+        return self.read_file(file_type="parquet", path=path, table_name=table_name)
+
+    def read_csv(
+        self, path: str | Path, table_name: str | None = None, **kwargs: Any
+    ) -> ir.Table:
+        """Register a csv file as a table in the current database.
+
+        Parameters
+        ----------
+        path
+            The data source.
+        table_name
+            An optional name to use for the created table. This defaults to
+            a sequentially generated name.
+
+        Returns
+        -------
+        ir.Table
+            The just-registered table
+        """
+        return self.read_file(file_type="csv", path=path, table_name=table_name)
+
+    def read_json(
+        self, path: str | Path, table_name: str | None = None, **kwargs: Any
+    ) -> ir.Table:
+        """Register a json file as a table in the current database.
+
+        Parameters
+        ----------
+        path
+            The data source.
+        table_name
+            An optional name to use for the created table. This defaults to
+            a sequentially generated name.
+
+        Returns
+        -------
+        ir.Table
+            The just-registered table
+        """
+        return self.read_file(file_type="json", path=path, table_name=table_name)
 
     @classmethod
     @lru_cache

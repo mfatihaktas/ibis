@@ -172,9 +172,9 @@ class CreateView(_CatalogAwareBaseQualifiedSQLStatement, CreateTable):
     @property
     def _prefix(self):
         if self.temporary:
-            return "CREATE TEMPORARY VIEW"
+            return f"CREATE TEMPORARY VIEW"
         else:
-            return "CREATE VIEW"
+            return f"CREATE VIEW"
 
     def _create_line(self):
         scoped_name = self._get_scoped_name(self.name, self.database, self.catalog)

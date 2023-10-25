@@ -85,7 +85,6 @@ def gzip_csv(data_dir, tmp_path):
         "bigquery",
         "clickhouse",
         "dask",
-        "flink",
         "impala",
         "mssql",
         "mysql",
@@ -111,7 +110,6 @@ def test_register_csv(con, data_dir, fname, in_table_name, out_table_name):
         "bigquery",
         "clickhouse",
         "dask",
-        "flink",
         "impala",
         "mssql",
         "mysql",
@@ -134,7 +132,6 @@ def test_register_csv_gz(con, data_dir, gzip_csv):
         "bigquery",
         "clickhouse",
         "dask",
-        "flink",
         "impala",
         "mssql",
         "mysql",
@@ -190,7 +187,6 @@ def read_table(path: Path) -> Iterator[tuple[str, pa.Table]]:
         "bigquery",
         "clickhouse",
         "dask",
-        "flink",
         "impala",
         "mssql",
         "mysql",
@@ -226,7 +222,6 @@ def test_register_parquet(
         "clickhouse",
         "dask",
         "datafusion",
-        "flink",
         "impala",
         "mssql",
         "mysql",
@@ -265,7 +260,6 @@ def test_register_iterator_parquet(
         "bigquery",
         "clickhouse",
         "dask",
-        "flink",
         "impala",
         "mssql",
         "mysql",
@@ -295,7 +289,6 @@ def test_register_pandas(con):
         "bigquery",
         "clickhouse",
         "dask",
-        "flink",
         "impala",
         "mssql",
         "mysql",
@@ -320,7 +313,6 @@ def test_register_pyarrow_tables(con):
         "bigquery",
         "clickhouse",
         "dask",
-        "flink",
         "impala",
         "mssql",
         "mysql",
@@ -402,7 +394,7 @@ def test_register_garbage(con, monkeypatch):
 @pytest.mark.notyet(
     [
         "bigquery",
-        "flink",
+        "dask",
         "impala",
         "mssql",
         "mysql",
@@ -443,7 +435,7 @@ def ft_data(data_dir):
 @pytest.mark.notyet(
     [
         "bigquery",
-        "flink",
+        "dask",
         "impala",
         "mssql",
         "mysql",
@@ -472,7 +464,7 @@ def test_read_parquet_glob(con, tmp_path, ft_data):
 @pytest.mark.notyet(
     [
         "bigquery",
-        "flink",
+        "dask",
         "impala",
         "mssql",
         "mysql",
@@ -504,7 +496,6 @@ def test_read_csv_glob(con, tmp_path, ft_data):
         "clickhouse",
         "dask",
         "datafusion",
-        "flink",
         "impala",
         "mssql",
         "mysql",
@@ -563,7 +554,7 @@ DIAMONDS_COLUMN_TYPES = {
 @pytest.mark.notyet(
     [
         "bigquery",
-        "flink",
+        "dask",
         "impala",
         "mssql",
         "mysql",

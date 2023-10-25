@@ -216,7 +216,7 @@ backend_type_mapping = {
 }
 
 
-@mark.notimpl(["datafusion", "druid", "flink"])
+@mark.notimpl(["datafusion", "druid"])
 def test_create_table_from_schema(con, new_schema, temp_table):
     new_table = con.create_table(temp_table, schema=new_schema)
     backend_mapping = backend_type_mapping.get(con.name, {})
@@ -277,7 +277,6 @@ def test_create_temporary_table_from_schema(tmpcon, new_schema):
         "datafusion",
         "druid",
         "duckdb",
-        "flink",
         "mssql",
         "mysql",
         "oracle",
@@ -303,23 +302,29 @@ def test_rename_table(con, temp_table, temp_table_orig):
 @mark.notyet(
     ["trino"], reason="trino doesn't support NOT NULL in its in-memory catalog"
 )
-@mark.broken(["snowflake", "flink"], reason="shows not nullable column as nullable")
+@mark.broken(["snowflake"], reason="snowflake shows not nullable column as nullable")
 def test_nullable_input_output(con, temp_table):
     sch = ibis.schema(
         [("foo", "int64"), ("bar", dt.int64(nullable=False)), ("baz", "boolean")]
     )
-    t = con.create_table(
-        temp_table,
-        schema=sch,
-        **{"tbl_properties": {"connector": None}} if con.name == "flink" else {},
-    )
+    t = con.create_table(temp_table, schema=sch)
 
     assert t.schema().types[0].nullable
     assert not t.schema().types[1].nullable
     assert t.schema().types[2].nullable
 
 
-@mark.notimpl(["datafusion", "druid", "flink", "polars"])
+@mark.notimpl(["datafusion", "druid", "polars"])
+@pytest.mark.broken(
+    ["flink"],
+    raises=ValueError,
+    reason=(
+        "table `FUNCTIONAL_ALLTYPES` does not exist"
+        "Note (mehmet): Not raised when only this test function is executed, "
+        "but can be reproduced by running all the test functions in this file."
+        "TODO (mehmet): Caused by the test execution order?"
+    ),
+)
 def test_create_drop_view(ddl_con, temp_view):
     # setup
     table_name = "functional_alltypes"
@@ -865,12 +870,10 @@ def test_self_join_memory_table(backend, con):
         param(
             ibis.memtable([("a", 1.0)], columns=["a", "b"]),
             id="python",
-            marks=pytest.mark.notimpl(["flink"], raises=NotImplementedError),
         ),
         param(
             ibis.memtable(pd.DataFrame([("a", 1.0)], columns=["a", "b"])),
             id="pandas-memtable",
-            marks=pytest.mark.notimpl(["flink"], raises=NotImplementedError),
         ),
         param(pd.DataFrame([("a", 1.0)], columns=["a", "b"]), id="pandas"),
     ],
@@ -1361,7 +1364,7 @@ def gen_test_name(con: BaseBackend) -> str:
     ["druid"], raises=sa.exc.ProgrammingError, reason="generated SQL fails to parse"
 )
 @mark.notimpl(["impala"], reason="impala doesn't support memtable")
-@mark.notimpl(["flink", "pyspark"])
+@mark.notimpl(["pyspark"])
 def test_overwrite(ddl_con):
     t0 = ibis.memtable({"a": [1, 2, 3]})
 

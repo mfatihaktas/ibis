@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 import sqlglot as sg
 
+import ibis
 import ibis.common.exceptions as exc
 import ibis.expr.operations as ops
 import ibis.expr.schema as sch
@@ -15,9 +16,12 @@ from ibis.backends.flink.compiler.core import FlinkCompiler
 from ibis.backends.flink.ddl import (
     CreateDatabase,
     CreateTableFromConnector,
+    CreateView,
     DropDatabase,
     DropTable,
+    DropView,
     InsertSelect,
+    RenameTable,
 )
 
 if TYPE_CHECKING:
@@ -331,13 +335,28 @@ class Backend(BaseBackend, CanCreateDatabase):
             # INTO ... VALUES to keep things consistent
             self._table_env.create_temporary_view(qualified_name, table)
         if isinstance(obj, ir.Table):
-            # TODO(chloeh13q): implement CREATE TABLE for expressions
-            raise NotImplementedError
-        if schema is not None:
-            if not tbl_properties:
-                raise exc.IbisError(
-                    "tbl_properties is required when creating table with schema"
+            if schema is not None and not schema.equals(obj.schema()):
+                raise exc.IbisTypeError(
+                    "Provided schema and Ibis table schema are incompatible. Please "
+                    "align the two schemas, or provide only one of the two arguments."
                 )
+
+            table = ibis.memtable(obj, schema=obj.schema())
+            return self.create_view(
+                name=name,
+                obj=table,
+                database=database,
+                catalog=catalog,
+                temporary=temp,
+                overwrite=overwrite,
+            )
+
+        if schema is not None:
+            tbl_properties = tbl_properties or {
+                "connector": "filesystem",
+                "path": "file:///tmp",
+                "format": "parquet",
+            }
             statement = CreateTableFromConnector(
                 table_name=name,
                 schema=schema,
@@ -347,7 +366,8 @@ class Backend(BaseBackend, CanCreateDatabase):
                 database=database,
                 catalog=catalog,
             )
-            self._exec_sql(statement.compile())
+            sql = statement.compile()
+            self._exec_sql(sql)
 
         return self.table(name, database=database)
 
@@ -384,12 +404,38 @@ class Backend(BaseBackend, CanCreateDatabase):
         )
         self._exec_sql(statement.compile())
 
+    def rename_table(
+        self,
+        old_name: str,
+        new_name: str,
+        must_exist: bool = True,
+    ) -> None:
+        """Rename an existing table.
+
+        Parameters
+        ----------
+        old_name
+            The old name of the table.
+        new_name
+            The new name of the table.
+        """
+        statement = RenameTable(
+            old_name=old_name,
+            new_name=new_name,
+            must_exist=must_exist,
+        )
+        sql = statement.compile()
+        self._exec_sql(sql)
+
     def create_view(
         self,
         name: str,
-        obj: ir.Table,
-        *,
+        obj: ir.Table | None = None,
+        query_expression: str | None = None,
         database: str | None = None,
+        catalog: str | None = None,
+        temporary: bool = False,
+        if_not_exists: bool = False,
         overwrite: bool = False,
     ) -> ir.Table:
         """Create a new view from an expression.
@@ -403,15 +449,42 @@ class Backend(BaseBackend, CanCreateDatabase):
         database
             Name of the database where the view will be created, if not
             provided the database's default is used.
+        catalog
+            Name of the catalog where the table exists, if not the default.
+        if_not_exists
+            If the view with `name` is already present, and
+            (1) If `if_not_exists = True`, then do not do anything.
+            (2) If `if_not_exists = False`, then raise an exception.
         overwrite
-            Whether to clobber an existing view with the same name.
+            If True, remove the existing view with the same name, and then proceed
+            with creating the new one.
 
         Returns
         -------
         Table
             The view that was created.
         """
-        raise NotImplementedError
+        if overwrite:
+            self.drop_view(name=name, database=database, catalog=catalog, force=True)
+
+        if query_expression is None:
+            if obj is None:
+                raise exc.IbisError(
+                    "`obj` should be given if no `query_expression` is given."
+                )
+
+            query_expression = self.compile(obj)
+
+        statement = CreateView(
+            name=name,
+            query_expression=query_expression,
+            database=database,
+            temporary=temporary,
+        )
+        sql = statement.compile()
+        self._exec_sql(sql)
+
+        return self.table(name=name, database=database, catalog=catalog)
 
     def drop_view(
         self,
@@ -435,10 +508,16 @@ class Backend(BaseBackend, CanCreateDatabase):
             If `False`, an exception is raised if the view does not exist.
         """
         qualified_name = self._fully_qualified_name(name, database, catalog)
-        if not (self._table_env.drop_temporary_view(qualified_name) or force):
-            raise exc.IntegrityError(f"View {name} does not exist.")
-
         # TODO(deepyaman): Support (and differentiate) permanent views.
+
+        statement = DropView(
+            name=name,
+            database=database,
+            catalog=catalog,
+            must_exist=(not force),
+        )
+        sql = statement.compile()
+        self._exec_sql(sql)
 
     @classmethod
     @lru_cache

@@ -37,7 +37,10 @@ def type_to_flink_sql_string(tval):
     if tval.is_timestamp():
         return f"timestamp({tval.scale})"
     else:
-        return type_to_sql_string(tval)
+        sql_string = type_to_sql_string(tval)
+        if not tval.nullable:
+            sql_string += " not null"
+        return sql_string
 
 
 def _format_watermark_strategy(watermark: Watermark) -> str:

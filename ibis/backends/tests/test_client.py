@@ -208,7 +208,6 @@ def test_sql(backend, con):
     table = backend.format_table("functional_alltypes")
     limit = _LIMIT.get(backend.name(), "LIMIT 10")
 
-    # TODO (mehmet): Is there a way to get ir.Expr from SQL statement for Flink?
     expr = con.sql(f"SELECT * FROM {table} {limit}")
     result = expr.execute()
     assert len(result) == 10
@@ -333,14 +332,6 @@ def test_rename_table(con, temp_table, temp_table_orig):
     ["trino"], reason="trino doesn't support NOT NULL in its in-memory catalog"
 )
 @mark.broken(["snowflake"], reason="snowflake shows not nullable column as nullable")
-@mark.broken(
-    ["flink"],
-    raises=AssertionError,
-    reason=(
-        "assert not True, where True = Int64(nullable=True).nullable"
-        "Flink shows not nullable column as nullable"
-    ),
-)
 def test_nullable_input_output(con, temp_table):
     sch = ibis.schema(
         [("foo", "int64"), ("bar", dt.int64(nullable=False)), ("baz", "boolean")]

@@ -353,7 +353,7 @@ def test_nullable_input_output(con, temp_table):
     assert t.schema().types[2].nullable
 
 
-@mark.notimpl(["datafusion", "druid", "flink", "polars"])
+@mark.notimpl(["datafusion", "druid", "polars"])
 def test_create_drop_view(ddl_con, temp_view):
     # setup
     table_name = "functional_alltypes"
@@ -1411,7 +1411,7 @@ def gen_test_name(con: BaseBackend) -> str:
     ["druid"], raises=sa.exc.ProgrammingError, reason="generated SQL fails to parse"
 )
 @mark.notimpl(["impala"], reason="impala doesn't support memtable")
-@mark.notimpl(["flink", "pyspark"])
+@mark.notimpl(["pyspark"])
 def test_overwrite(ddl_con):
     t0 = ibis.memtable({"a": [1, 2, 3]})
 

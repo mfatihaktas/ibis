@@ -6,6 +6,7 @@ import sqlglot as sg
 
 import ibis.expr.schema as sch
 from ibis.backends.base.sql.ddl import (
+    CreateTable,
     CreateTableWithSchema,
     DropObject,
     InsertSelect,
@@ -148,6 +149,43 @@ class CreateTableFromConnector(
         yield self._format_tbl_properties()
 
 
+class CreateView(_CatalogAwareBaseQualifiedSQLStatement, CreateTable):
+    def __init__(
+        self,
+        name: str,
+        query_expression: str,
+        database: str | None = None,
+        catalog: str | None = None,
+        can_exist: bool = False,
+        temporary: bool = False,
+    ):
+        super().__init__(
+            table_name=name,
+            database=database,
+            can_exist=can_exist,
+        )
+        self.name = name
+        self.query_expression = query_expression
+        self.catalog = catalog
+        self.temporary = temporary
+
+    @property
+    def _prefix(self):
+        if self.temporary:
+            return f"CREATE TEMPORARY VIEW"
+        else:
+            return f"CREATE VIEW"
+
+    def _create_line(self):
+        scoped_name = self._get_scoped_name(self.name, self.database, self.catalog)
+        return f"{self._prefix} {self._if_exists()}{scoped_name}"
+
+    @property
+    def pieces(self):
+        yield self._create_line()
+        yield f"AS {self.query_expression}"
+
+
 class DropTable(_CatalogAwareBaseQualifiedSQLStatement, DropObject):
     _object_type = "TABLE"
 
@@ -173,6 +211,26 @@ class DropTable(_CatalogAwareBaseQualifiedSQLStatement, DropObject):
         if_exists = "" if self.must_exist else "IF EXISTS "
         object_name = self._object_name()
         return f"DROP {temp}{self._object_type} {if_exists}{object_name}"
+
+
+class DropView(DropTable):
+    _object_type = "VIEW"
+
+    def __init__(
+        self,
+        name: str,
+        database: str | None = None,
+        catalog: str | None = None,
+        must_exist: bool = True,
+        temp: bool = False,
+    ):
+        super().__init__(
+            table_name=name,
+            database=database,
+            catalog=catalog,
+            must_exist=must_exist,
+            temp=temp,
+        )
 
 
 class RenameTable(RenameTable):

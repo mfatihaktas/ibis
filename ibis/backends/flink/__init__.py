@@ -16,8 +16,10 @@ from ibis.backends.flink.compiler.core import FlinkCompiler
 from ibis.backends.flink.ddl import (
     CreateDatabase,
     CreateTableFromConnector,
+    CreateView,
     DropDatabase,
     DropTable,
+    DropView,
     InsertSelect,
     RenameTable,
 )
@@ -340,13 +342,14 @@ class Backend(BaseBackend, CanCreateDatabase):
                 )
 
             # TODO (mehmet): Is it OK to return a view here?
-            table = ibis.memtable(obj, schema=schema)
+            table = ibis.memtable(obj, schema=obj.schema())
             query_expression = self.compile(table)
             return self.create_view(
                 name=name,
                 query_expression=query_expression,
                 database=database,
                 catalog=catalog,
+                temporary=temp,
                 overwrite=overwrite,
             )
 
@@ -431,6 +434,9 @@ class Backend(BaseBackend, CanCreateDatabase):
         obj: ir.Table | None = None,
         query_expression: str | None = None,
         database: str | None = None,
+        catalog: str | None = None,
+        temporary: bool = False,
+        if_not_exists: bool = False,
         overwrite: bool = False,
     ) -> ir.Table:
         """Create a new view from an expression.
@@ -444,14 +450,24 @@ class Backend(BaseBackend, CanCreateDatabase):
         database
             Name of the database where the view will be created, if not
             provided the database's default is used.
+        catalog
+            Name of the catalog where the table exists, if not the default.
+        if_not_exists
+            If the view with `name` is already present, and
+            (1) If `if_not_exists = True`, then do not do anything.
+            (2) If `if_not_exists = False`, then raise an exception.
         overwrite
-            Whether to clobber an existing view with the same name.
+            If True, remove the existing view with the same name, and then proceed
+            with creating the new one.
 
         Returns
         -------
         Table
             The view that was created.
         """
+        if overwrite:
+            self.drop_view(name=name, database=database, catalog=catalog, force=True)
+
         if query_expression is None:
             if obj is None:
                 raise exc.IbisError(
@@ -464,7 +480,7 @@ class Backend(BaseBackend, CanCreateDatabase):
             name=name,
             query_expression=query_expression,
             database=database,
-            can_exist=(not overwrite),
+            temporary=temporary,
         )
         sql = statement.compile()
         self._exec_sql(sql)
@@ -493,10 +509,16 @@ class Backend(BaseBackend, CanCreateDatabase):
             If `False`, an exception is raised if the view does not exist.
         """
         qualified_name = self._fully_qualified_name(name, database, catalog)
-        if not (self._table_env.drop_temporary_view(qualified_name) or force):
-            raise exc.IntegrityError(f"View {name} does not exist.")
-
         # TODO(deepyaman): Support (and differentiate) permanent views.
+
+        statement = DropView(
+            name=name,
+            database=database,
+            catalog=catalog,
+            must_exist=(not force),
+        )
+        sql = statement.compile()
+        self._exec_sql(sql)
 
     @classmethod
     @lru_cache

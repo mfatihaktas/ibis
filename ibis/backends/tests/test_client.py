@@ -1038,7 +1038,6 @@ def test_repr(alltypes, interactive, monkeypatch):
 @pytest.mark.notimpl(
     ["flink"],
     raises=NotImplementedError,
-    reason="NotImplementedError('flink') raised in repr()",
 )
 def test_interactive_repr_show_types(alltypes, show_types, monkeypatch):
     monkeypatch.setattr(ibis.options, "interactive", True)

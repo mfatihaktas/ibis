@@ -1014,7 +1014,6 @@ def test_dunder_array_column(alltypes, dtype):
                 pytest.mark.notimpl(
                     ["flink"],
                     raises=NotImplementedError,
-                    reason="NotImplementedError('flink') raised in repr()",
                 )
             ],
         ),

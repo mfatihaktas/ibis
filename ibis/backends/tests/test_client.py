@@ -1055,7 +1055,6 @@ def test_interactive_repr_show_types(alltypes, show_types, monkeypatch):
 @pytest.mark.notimpl(
     ["flink"],
     raises=NotImplementedError,
-    reason="NotImplementedError('flink') raised in repr()",
 )
 def test_interactive_repr_max_columns(alltypes, is_jupyter, monkeypatch):
     monkeypatch.setattr(ibis.options, "interactive", True)

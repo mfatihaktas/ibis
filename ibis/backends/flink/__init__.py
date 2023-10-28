@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 import sqlglot as sg
 
+import ibis
 import ibis.common.exceptions as exc
 import ibis.expr.operations as ops
 import ibis.expr.schema as sch
@@ -332,8 +333,23 @@ class Backend(BaseBackend, CanCreateDatabase):
             # INTO ... VALUES to keep things consistent
             self._table_env.create_temporary_view(qualified_name, table)
         if isinstance(obj, ir.Table):
-            # TODO(chloeh13q): implement CREATE TABLE for expressions
-            raise NotImplementedError
+            if schema is not None and not schema.equals(obj.schema()):
+                raise exc.IbisTypeError(
+                    "Provided schema and Ibis table schema are incompatible. Please "
+                    "align the two schemas, or provide only one of the two arguments."
+                )
+
+            # TODO (mehmet): Is it OK to return a view here?
+            table = ibis.memtable(obj, schema=schema)
+            query_expression = self.compile(table)
+            return self.create_view(
+                name=name,
+                query_expression=query_expression,
+                database=database,
+                catalog=catalog,
+                overwrite=overwrite,
+            )
+
         if schema is not None:
             if not tbl_properties:
                 raise exc.IbisError(
@@ -411,8 +427,9 @@ class Backend(BaseBackend, CanCreateDatabase):
     def create_view(
         self,
         name: str,
-        obj: ir.Table,
         *,
+        obj: ir.Table | None = None,
+        query_expression: str | None = None,
         database: str | None = None,
         overwrite: bool = False,
     ) -> ir.Table:
@@ -435,7 +452,24 @@ class Backend(BaseBackend, CanCreateDatabase):
         Table
             The view that was created.
         """
-        raise NotImplementedError
+        if query_expression is None:
+            if obj is None:
+                raise exc.IbisError(
+                    "`obj` should be given if no `query_expression` is given."
+                )
+
+            query_expression = obj.compile()
+
+        statement = CreateView(
+            name=name,
+            query_expression=query_expression,
+            database=database,
+            can_exist=(not overwrite),
+        )
+        sql = statement.compile()
+        self._exec_sql(sql)
+
+        return self.table(name=name, database=database, catalog=catalog)
 
     def drop_view(
         self,

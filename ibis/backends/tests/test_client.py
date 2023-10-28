@@ -900,24 +900,10 @@ def test_self_join_memory_table(backend, con):
         param(
             ibis.memtable([("a", 1.0)], columns=["a", "b"]),
             id="python",
-            marks=[
-                pytest.mark.notimpl(
-                    ["flink"],
-                    raises=NotImplementedError,
-                    reason="NotImplementedError('flink') raised in repr()",
-                )
-            ],
         ),
         param(
             ibis.memtable(pd.DataFrame([("a", 1.0)], columns=["a", "b"])),
             id="pandas-memtable",
-            marks=[
-                pytest.mark.notimpl(
-                    ["flink"],
-                    raises=NotImplementedError,
-                    reason="NotImplementedError('flink') raised in repr()",
-                )
-            ],
         ),
         param(pd.DataFrame([("a", 1.0)], columns=["a", "b"]), id="pandas"),
     ],

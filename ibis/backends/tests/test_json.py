@@ -38,15 +38,16 @@ pytestmark = [
     condition=vparse(sqlite3.sqlite_version) < vparse("3.38.0"),
     reason="JSON not supported in SQLite < 3.38.0",
 )
+@pytest.mark.broken(
+    ["flink"],
+    raises=AssertionError,
+    reason="Series values are different (16.66667 %)",
+)
 def test_json_getitem(json_t, expr_fn, expected, backend):
     expr = expr_fn(json_t)
     result = expr.execute()
 
-    # Flink returns to queries
-    if backend.name() == "flink":
-        expected = [e if (e is None or isinstance(e, list)) else [e] for e in expected]
     expected = pd.Series(expected, name="res")
-
     tm.assert_series_equal(result.fillna(pd.NA), expected.fillna(pd.NA))
 
 

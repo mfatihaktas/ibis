@@ -29,8 +29,6 @@ class TestConf(BackendTest, RoundAwayFromZero):
         import pandas as pd
         from ibis.backends.tests.data import json_types
 
-        from ibis.backends.tests.data import json_types
-
         for table_name in TEST_TABLES:
             path = self.data_dir / "parquet" / f"{table_name}.parquet"
 

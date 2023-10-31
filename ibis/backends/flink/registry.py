@@ -308,7 +308,7 @@ def _date_sub(translator: ExprTranslator, op: ops.temporal.DateSub) -> str:
 
 def _extract_epoch_seconds(translator: ExprTranslator, op: ops.Node) -> str:
     arg = translator.translate(op.arg)
-    return f"UNIX_TIMESTAMP(CAST({arg} AS STRING))"
+    return f"UNIX_TIMESTAMP(CAST({arg} AS STRING), 'yyyy-MM-dd HH:mm:ss.SSS')"
 
 
 def _string_to_timestamp(

@@ -127,7 +127,7 @@ def test_context_adjustment_filter_before_window(alltypes, context, monkeypatch)
 @pytest.mark.notimpl(
     ["flink"],
     raises=com.OperationNotDefinedError,
-    reason="No translation rule for <class 'ibis.expr.operations.structs.StructField'>",
+    reason="Flink engine does not support generic window clause with no order by>",
 )
 def test_context_adjustment_multi_col_udf_non_grouped(alltypes, context, monkeypatch):
     monkeypatch.setattr(ibis.options.context_adjustment, "time_col", "timestamp_col")

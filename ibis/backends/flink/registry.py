@@ -92,6 +92,9 @@ def _interval_subtract(
 def _literal(translator: ExprTranslator, op: ops.Literal) -> str:
     from ibis.backends.flink.utils import translate_literal
 
+    if op.dtype.is_numeric():
+        return f"{op.value}"
+
     return translate_literal(op)
 
 
@@ -323,6 +326,11 @@ def _map_get(translator: ExprTranslator, op: ops.maps.MapGet) -> str:
     return f"{map_} [ {key} ]"
 
 
+def _struct_field(translator: ExprTranslator, op: ops.StructField) -> str:
+    arg = translator.translate(op.arg)
+    return f"{arg}.`{op.field}`"
+
+
 def _day_of_week_index(
     translator: ExprTranslator, op: ops.temporal.DayOfWeekIndex
 ) -> str:
@@ -524,6 +532,7 @@ operation_registry.update(
         ops.JSONGetItem: _json_get_item,
         ops.Map: _map,
         ops.MapGet: _map_get,
+        ops.StructField: _struct_field,
         # Temporal functions
         ops.DateAdd: _date_add,
         ops.DateDiff: _date_diff,
